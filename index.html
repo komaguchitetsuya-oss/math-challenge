@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>計算チャレンジ</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --primary:#4f46e5;--primary-hover:#4338ca;
+    --success:#16a34a;--danger:#dc2626;
+    --bg:#f8fafc;--card:#fff;--text:#1e293b;--muted:#64748b;
+    --radius:12px;
+  }
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Kaku Gothic ProN',sans-serif;
+    background:var(--bg);color:var(--text);
+    min-height:100dvh;display:flex;align-items:center;justify-content:center;
+    padding:16px;
+  }
+  .screen{display:none;width:100%;max-width:480px;text-align:center}
+  .screen.active{display:block}
+  h1{font-size:2rem;margin-bottom:8px}
+  h2{font-size:1.5rem;margin-bottom:16px}
+  .subtitle{color:var(--muted);margin-bottom:32px;font-size:.95rem}
+  .btn{
+    display:inline-block;padding:14px 32px;border:none;border-radius:var(--radius);
+    font-size:1.1rem;font-weight:600;cursor:pointer;transition:all .15s;
+    text-decoration:none;color:#fff;min-width:200px;
+  }
+  .btn-primary{background:var(--primary)}
+  .btn-primary:hover{background:var(--primary-hover)}
+  .btn-success{background:var(--success)}
+  .btn-danger{background:var(--danger)}
+  .btn-outline{
+    background:transparent;color:var(--primary);border:2px solid var(--primary);
+  }
+  .btn-outline:hover{background:var(--primary);color:#fff}
+  .btn+.btn{margin-top:12px}
+  .btn-group{display:flex;flex-direction:column;align-items:center;gap:12px}
+
+  /* Game screen */
+  .game-header{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-bottom:24px;padding:16px;
+    background:var(--card);border-radius:var(--radius);
+    box-shadow:0 1px 3px rgba(0,0,0,.08);
+  }
+  .timer{font-size:1.4rem;font-weight:700;color:var(--primary)}
+  .timer.danger{color:var(--danger);animation:pulse .5s infinite alternate}
+  @keyframes pulse{to{opacity:.5}}
+  .score-display{font-size:1.4rem;font-weight:700}
+  .question-number{font-size:.9rem;color:var(--muted);margin-bottom:8px}
+  .question{
+    font-size:2.8rem;font-weight:800;letter-spacing:2px;
+    padding:32px 16px;margin-bottom:24px;
+    background:var(--card);border-radius:var(--radius);
+    box-shadow:0 1px 3px rgba(0,0,0,.08);
+  }
+  .answer-area{display:flex;gap:12px;justify-content:center;margin-bottom:16px}
+  #answerInput{
+    font-size:2rem;text-align:center;width:180px;padding:12px;
+    border:2px solid #cbd5e1;border-radius:var(--radius);
+    outline:none;transition:border-color .15s;
+    -moz-appearance:textfield;
+  }
+  #answerInput::-webkit-outer-spin-button,
+  #answerInput::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  #answerInput:focus{border-color:var(--primary)}
+  #submitBtn{padding:12px 24px;font-size:1.3rem}
+  .feedback{
+    font-size:1.2rem;font-weight:700;min-height:40px;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    transition:all .2s;
+  }
+  .feedback.correct{color:var(--success)}
+  .feedback.wrong{color:var(--danger)}
+
+  .flash{animation:flash-bg .4s}
+  @keyframes flash-bg{
+    0%{background:rgba(22,163,74,.15)}
+    100%{background:transparent}
+  }
+
+  /* Result screen */
+  .result-score{font-size:4rem;font-weight:800;color:var(--primary);margin:16px 0}
+  .result-rank{font-size:1.2rem;color:var(--muted);margin-bottom:24px}
+  .result-detail{color:var(--muted);margin-bottom:8px;font-size:.95rem}
+
+  /* Ranking screen */
+  .ranking-list{
+    list-style:none;text-align:left;
+    background:var(--card);border-radius:var(--radius);
+    box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;
+    margin-bottom:24px;
+  }
+  .ranking-item{
+    display:flex;align-items:center;padding:12px 16px;
+    border-bottom:1px solid #f1f5f9;
+  }
+  .ranking-item:last-child{border-bottom:none}
+  .ranking-item .rank{
+    font-size:1.2rem;font-weight:700;width:40px;
+    color:var(--muted);flex-shrink:0;
+  }
+  .ranking-item .rank.gold{color:#f59e0b}
+  .ranking-item .rank.silver{color:#94a3b8}
+  .ranking-item .rank.bronze{color:#b45309}
+  .ranking-item .info{flex:1}
+  .ranking-item .info .date{font-size:.8rem;color:var(--muted)}
+  .ranking-item .score-val{font-size:1.3rem;font-weight:700;color:var(--primary)}
+  .empty-message{color:var(--muted);padding:32px 16px}
+
+  /* Chart screen */
+  .chart-container{
+    background:var(--card);border-radius:var(--radius);
+    box-shadow:0 1px 3px rgba(0,0,0,.08);
+    padding:16px;margin-bottom:24px;
+  }
+
+  /* Game over overlay */
+  .game-over-reason{
+    font-size:1.1rem;color:var(--muted);margin-bottom:8px;
+  }
+
+  /* Numpad */
+  .numpad{
+    display:none;
+    grid-template-columns:repeat(3,1fr);
+    gap:8px;max-width:320px;margin:0 auto 16px;
+  }
+  .numpad-btn{
+    padding:14px 0;font-size:1.5rem;font-weight:700;
+    border:none;border-radius:var(--radius);cursor:pointer;
+    background:var(--card);color:var(--text);
+    box-shadow:0 1px 3px rgba(0,0,0,.1);
+    transition:background .1s;
+    -webkit-tap-highlight-color:transparent;
+    user-select:none;
+  }
+  .numpad-btn:active{background:#e2e8f0}
+  .numpad-btn.key-0{grid-column:1/2}
+  .numpad-btn.key-del{background:#fee2e2;color:var(--danger)}
+  .numpad-btn.key-ok{background:var(--primary);color:#fff}
+  .numpad-btn.key-ok:active{background:var(--primary-hover)}
+
+  /* Mobile: show numpad, hide OK button next to input */
+  @media (hover:none) and (pointer:coarse){
+    .numpad{display:grid}
+    #submitBtn{display:none}
+    #answerInput{caret-color:var(--primary)}
+  }
+
+  /* Small screen adjustments */
+  @media (max-width:480px){
+    body{padding:8px;align-items:flex-start;padding-top:16px}
+    h1{font-size:1.6rem}
+    .question{font-size:2.2rem;padding:20px 12px;margin-bottom:16px}
+    #answerInput{font-size:1.6rem;width:150px;padding:10px}
+    .game-header{padding:12px;margin-bottom:16px}
+    .result-score{font-size:3rem}
+  }
+</style>
+</head>
+<body>
+
+<!-- Start Screen -->
+<div id="startScreen" class="screen active">
+  <h1>計算チャレンジ</h1>
+  <p class="subtitle">制限時間内にどれだけ連続正解できるか挑戦しよう！<br>正解するたびに +5秒</p>
+  <div class="btn-group">
+    <button class="btn btn-primary" onclick="startGame()">スタート</button>
+    <button class="btn btn-outline" onclick="showScreen('rankingScreen')">ランキング</button>
+    <button class="btn btn-outline" onclick="showScreen('chartScreen')">成績推移</button>
+  </div>
+</div>
+
+<!-- Game Screen -->
+<div id="gameScreen" class="screen">
+  <div class="game-header">
+    <div><span style="font-size:.85rem;color:var(--muted)">残り時間</span><br><span id="timer" class="timer">60.0</span></div>
+    <div><span style="font-size:.85rem;color:var(--muted)">連続正解</span><br><span id="scoreDisplay" class="score-display">0</span></div>
+  </div>
+  <div class="question-number">第 <span id="questionNum">1</span> 問</div>
+  <div id="questionBox" class="question">12 + 34</div>
+  <div class="answer-area">
+    <input type="text" id="answerInput" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="答え">
+    <button id="submitBtn" class="btn btn-primary" onclick="submitAnswer()">OK</button>
+  </div>
+  <div id="feedback" class="feedback"></div>
+  <div class="numpad" id="numpad">
+    <button class="numpad-btn" data-key="1">1</button>
+    <button class="numpad-btn" data-key="2">2</button>
+    <button class="numpad-btn" data-key="3">3</button>
+    <button class="numpad-btn" data-key="4">4</button>
+    <button class="numpad-btn" data-key="5">5</button>
+    <button class="numpad-btn" data-key="6">6</button>
+    <button class="numpad-btn" data-key="7">7</button>
+    <button class="numpad-btn" data-key="8">8</button>
+    <button class="numpad-btn" data-key="9">9</button>
+    <button class="numpad-btn key-del" data-key="del">&#x232B;</button>
+    <button class="numpad-btn key-0" data-key="0">0</button>
+    <button class="numpad-btn key-ok" data-key="ok">OK</button>
+  </div>
+</div>
+
+<!-- Result Screen -->
+<div id="resultScreen" class="screen">
+  <h2>ゲーム終了</h2>
+  <div id="gameOverReason" class="game-over-reason"></div>
+  <div class="result-score" id="resultScore">0</div>
+  <div class="result-detail">連続正解</div>
+  <div class="result-rank" id="resultRank"></div>
+  <div class="btn-group">
+    <button class="btn btn-primary" onclick="startGame()">もう一度</button>
+    <button class="btn btn-outline" onclick="showScreen('rankingScreen')">ランキング</button>
+    <button class="btn btn-outline" onclick="showScreen('startScreen')">トップに戻る</button>
+  </div>
+</div>
+
+<!-- Ranking Screen -->
+<div id="rankingScreen" class="screen">
+  <h2>ランキング</h2>
+  <ul id="rankingList" class="ranking-list"></ul>
+  <button class="btn btn-outline" onclick="showScreen('startScreen')">戻る</button>
+</div>
+
+<!-- Chart Screen -->
+<div id="chartScreen" class="screen">
+  <h2>成績推移</h2>
+  <div class="chart-container">
+    <canvas id="historyChart"></canvas>
+  </div>
+  <button class="btn btn-outline" onclick="showScreen('startScreen')">戻る</button>
+</div>
+
+<script>
+// ==============================
+// State
+// ==============================
+let timeLeft = 0;
+let score = 0;
+let currentAnswer = 0;
+let timerInterval = null;
+let gameActive = false;
+let historyChart = null;
+const isTouchDevice = window.matchMedia('(hover:none) and (pointer:coarse)').matches;
+
+// ==============================
+// Screen management
+// ==============================
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (id === 'rankingScreen') renderRanking();
+  if (id === 'chartScreen') renderChart();
+}
+
+// ==============================
+// History (localStorage)
+// ==============================
+function getHistory() {
+  try {
+    return JSON.parse(localStorage.getItem('mathGameHistory') || '[]');
+  } catch { return []; }
+}
+
+function saveResult(score) {
+  const history = getHistory();
+  history.push({ date: new Date().toISOString(), score });
+  localStorage.setItem('mathGameHistory', JSON.stringify(history));
+}
+
+// ==============================
+// Problem generation
+// ==============================
+function rand(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function generateProblem(questionNumber) {
+  const ops = ['+', '-', '×', '÷'];
+  const op = ops[rand(0, 3)];
+  let a, b, answer, display;
+
+  if (questionNumber <= 5) {
+    // Easy
+    switch (op) {
+      case '+': a = rand(10, 50); b = rand(1, 9); answer = a + b; break;
+      case '-': a = rand(10, 50); b = rand(1, 9); if (a <= b) a = b + rand(1, 20); answer = a - b; break;
+      case '×': a = rand(10, 30); b = rand(2, 5); answer = a * b; break;
+      case '÷': b = rand(2, 5); answer = rand(2, 9); a = answer * b; break;
+    }
+  } else if (questionNumber <= 10) {
+    // Normal
+    switch (op) {
+      case '+': a = rand(10, 99); b = rand(10, 99); answer = a + b; break;
+      case '-': a = rand(10, 99); b = rand(10, 99); if (a <= b) { const t = a; a = b; b = t; } answer = a - b; if (answer === 0) { a++; answer = a - b; } break;
+      case '×': a = rand(10, 99); b = rand(2, 9); answer = a * b; break;
+      case '÷': b = rand(2, 9); answer = rand(5, 15); a = answer * b; break;
+    }
+  } else if (questionNumber <= 20) {
+    // Hard-ish
+    switch (op) {
+      case '+': a = rand(100, 999); b = rand(10, 99); answer = a + b; break;
+      case '-': a = rand(100, 999); b = rand(10, 99); answer = a - b; break;
+      case '×': a = rand(30, 99); b = rand(4, 9); answer = a * b; break;
+      case '÷': b = rand(2, 5); answer = rand(10, 99); a = answer * b; break;
+    }
+  } else {
+    // Hard
+    switch (op) {
+      case '+': a = rand(100, 999); b = rand(100, 999); answer = a + b; break;
+      case '-': a = rand(100, 999); b = rand(100, 999); if (a <= b) { const t = a; a = b; b = t; } answer = a - b; if (answer === 0) { a++; answer = a - b; } break;
+      case '×': a = rand(50, 99); b = rand(5, 9); answer = a * b; break;
+      case '÷': b = rand(3, 9); answer = rand(20, 150); a = answer * b; break;
+    }
+  }
+
+  display = `${a} ${op} ${b}`;
+  return { display, answer };
+}
+
+// ==============================
+// Game logic
+// ==============================
+function startGame() {
+  score = 0;
+  timeLeft = 60.0;
+  gameActive = true;
+
+  document.getElementById('scoreDisplay').textContent = '0';
+  document.getElementById('feedback').textContent = '';
+  document.getElementById('feedback').className = 'feedback';
+
+  showScreen('gameScreen');
+  nextQuestion();
+  startTimer();
+  if (!isTouchDevice) document.getElementById('answerInput').focus();
+}
+
+function nextQuestion() {
+  const questionNum = score + 1;
+  const problem = generateProblem(questionNum);
+  currentAnswer = problem.answer;
+  document.getElementById('questionBox').textContent = problem.display;
+  document.getElementById('questionNum').textContent = questionNum;
+  document.getElementById('answerInput').value = '';
+  if (!isTouchDevice) document.getElementById('answerInput').focus();
+}
+
+function submitAnswer() {
+  if (!gameActive) return;
+  const input = document.getElementById('answerInput');
+  const value = input.value.trim();
+  if (value === '') return;
+
+  const userAnswer = parseInt(value, 10);
+  if (isNaN(userAnswer)) {
+    input.value = '';
+    return;
+  }
+
+  const feedbackEl = document.getElementById('feedback');
+
+  if (userAnswer === currentAnswer) {
+    // Correct
+    score++;
+    timeLeft += 5;
+    document.getElementById('scoreDisplay').textContent = score;
+    feedbackEl.textContent = '正解！ +5秒';
+    feedbackEl.className = 'feedback correct';
+    document.getElementById('questionBox').classList.remove('flash');
+    void document.getElementById('questionBox').offsetWidth; // reflow
+    document.getElementById('questionBox').classList.add('flash');
+    updateTimerDisplay();
+    nextQuestion();
+  } else {
+    // Wrong - game over
+    gameActive = false;
+    feedbackEl.textContent = `不正解… 答えは ${currentAnswer}`;
+    feedbackEl.className = 'feedback wrong';
+    setTimeout(() => endGame('wrong'), 800);
+  }
+}
+
+function startTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    timeLeft -= 0.1;
+    updateTimerDisplay();
+    if (timeLeft <= 0) {
+      timeLeft = 0;
+      updateTimerDisplay();
+      gameActive = false;
+      endGame('time');
+    }
+  }, 100);
+}
+
+function updateTimerDisplay() {
+  const el = document.getElementById('timer');
+  el.textContent = Math.max(0, timeLeft).toFixed(1);
+  if (timeLeft <= 10) {
+    el.classList.add('danger');
+  } else {
+    el.classList.remove('danger');
+  }
+}
+
+function endGame(reason) {
+  clearInterval(timerInterval);
+  timerInterval = null;
+  gameActive = false;
+
+  saveResult(score);
+  const history = getHistory();
+  const sorted = [...history].sort((a, b) => b.score - a.score);
+  const rank = sorted.findIndex(h => h.score === score && h.date === history[history.length - 1].date) + 1;
+
+  document.getElementById('resultScore').textContent = score;
+  document.getElementById('resultRank').textContent = `歴代 ${rank} 位 / ${history.length} 回中`;
+  document.getElementById('gameOverReason').textContent =
+    reason === 'time' ? 'タイムアップ！' : '不正解でゲーム終了';
+
+  showScreen('resultScreen');
+}
+
+// Enter key to submit (desktop)
+document.getElementById('answerInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    submitAnswer();
+  }
+});
+
+// Mobile: prevent native keyboard, use custom numpad instead
+if (isTouchDevice) {
+  document.getElementById('answerInput').setAttribute('readonly', '');
+}
+
+// Numpad event handler
+document.getElementById('numpad').addEventListener('click', (e) => {
+  const btn = e.target.closest('.numpad-btn');
+  if (!btn) return;
+  const key = btn.dataset.key;
+  const input = document.getElementById('answerInput');
+
+  if (key === 'ok') {
+    submitAnswer();
+  } else if (key === 'del') {
+    input.value = input.value.slice(0, -1);
+  } else {
+    input.value += key;
+  }
+});
+
+// ==============================
+// Ranking
+// ==============================
+function renderRanking() {
+  const history = getHistory();
+  const sorted = [...history].sort((a, b) => b.score - a.score).slice(0, 20);
+  const list = document.getElementById('rankingList');
+
+  if (sorted.length === 0) {
+    list.innerHTML = '<li class="empty-message">まだ記録がありません。</li>';
+    return;
+  }
+
+  list.innerHTML = sorted.map((item, i) => {
+    const d = new Date(item.date);
+    const dateStr = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+    const rankLabel = i < 3 ? ['🥇','🥈','🥉'][i] : `${i+1}`;
+    return `
+      <li class="ranking-item">
+        <div class="rank ${rankClass}">${rankLabel}</div>
+        <div class="info">
+          <div class="date">${dateStr}</div>
+        </div>
+        <div class="score-val">${item.score} 問</div>
+      </li>`;
+  }).join('');
+}
+
+// ==============================
+// Chart
+// ==============================
+function renderChart() {
+  const history = getHistory();
+  const canvas = document.getElementById('historyChart');
+
+  if (historyChart) {
+    historyChart.destroy();
+    historyChart = null;
+  }
+
+  if (history.length === 0) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#64748b';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('まだ記録がありません。', canvas.width / 2, canvas.height / 2);
+    return;
+  }
+
+  // Show last 30 plays
+  const recent = history.slice(-30);
+  const labels = recent.map(h => {
+    const d = new Date(h.date);
+    return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  });
+  const data = recent.map(h => h.score);
+
+  historyChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: '連続正解数',
+        data,
+        borderColor: '#4f46e5',
+        backgroundColor: 'rgba(79,70,229,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointBackgroundColor: '#4f46e5',
+        pointRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { stepSize: 1, precision: 0 },
+          title: { display: true, text: '連続正解数' }
+        },
+        x: {
+          ticks: { maxRotation: 45, font: { size: 10 } },
+          title: { display: true, text: 'プレイ日時' }
+        }
+      },
+      plugins: {
+        legend: { display: false }
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>
