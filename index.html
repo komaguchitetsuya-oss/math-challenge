@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>計算チャレンジ</title>
+<title>さーちゃん計算チャレンジ</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -140,9 +140,9 @@
     user-select:none;
   }
   .numpad-btn:active{background:#e2e8f0}
-  .numpad-btn.key-0{grid-column:1/2}
+  .numpad-btn.key-0{grid-column:2/3}
   .numpad-btn.key-del{background:#fee2e2;color:var(--danger)}
-  .numpad-btn.key-ok{background:var(--primary);color:#fff}
+  .numpad-btn.key-ok{grid-column:1/-1;background:var(--primary);color:#fff;padding:16px 0}
   .numpad-btn.key-ok:active{background:var(--primary-hover)}
 
   /* Mobile: show numpad, hide OK button next to input */
@@ -167,7 +167,7 @@
 
 <!-- Start Screen -->
 <div id="startScreen" class="screen active">
-  <h1>計算チャレンジ</h1>
+  <h1>さーちゃん計算チャレンジ</h1>
   <p class="subtitle">制限時間内にどれだけ連続正解できるか挑戦しよう！<br>正解するたびに +5秒</p>
   <div class="btn-group">
     <button class="btn btn-primary" onclick="startGame()">スタート</button>
@@ -201,6 +201,7 @@
     <button class="numpad-btn" data-key="9">9</button>
     <button class="numpad-btn key-del" data-key="del">&#x232B;</button>
     <button class="numpad-btn key-0" data-key="0">0</button>
+    <button class="numpad-btn" data-key="del" style="visibility:hidden"></button>
     <button class="numpad-btn key-ok" data-key="ok">OK</button>
   </div>
 </div>
