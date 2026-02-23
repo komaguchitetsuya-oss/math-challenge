@@ -280,12 +280,15 @@ function rand(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function pick(arr) { return arr[rand(0, arr.length - 1)]; }
+
 function roundDec(n) {
-  return Math.round(n * 1000) / 1000;
+  return Math.round(n * 10000) / 10000;
 }
 
 function formatNum(n) {
-  return Number.isInteger(n) ? String(n) : String(roundDec(n));
+  const r = roundDec(n);
+  return Number.isInteger(r) ? String(r) : String(r);
 }
 
 function generateProblem(questionNumber) {
@@ -295,66 +298,30 @@ function generateProblem(questionNumber) {
 
   const decChance = questionNumber <= 5 ? 0.25 : questionNumber <= 10 ? 0.35 : 0.45;
   const useDec = Math.random() < decChance;
+  const level = questionNumber <= 5 ? 1 : questionNumber <= 10 ? 2 : questionNumber <= 20 ? 3 : 4;
 
-  if (questionNumber <= 5) {
-    // Easy
-    if (useDec) {
-      switch (op) {
-        case '+': { const a10=rand(10,200),b10=rand(1,90); a=a10/10; b=b10/10; answer=(a10+b10)/10; break; }
-        case '-': { const a10=rand(50,200),b10=rand(1,Math.min(49,a10-1)); a=a10/10; b=b10/10; answer=(a10-b10)/10; break; }
-        case '×': { const a10=rand(11,99); b=rand(2,5); a=a10/10; answer=roundDec(a*b); break; }
-        case '÷': { const ds=[2,4,5]; b=ds[rand(0,2)]; a=rand(10,50); while(a%b===0)a++; answer=roundDec(a/b); break; }
-      }
-    } else {
+  if (!useDec) {
+    // ===== Integer problems (unchanged) =====
+    if (level === 1) {
       switch (op) {
         case '+': a=rand(10,50); b=rand(1,9); answer=a+b; break;
         case '-': a=rand(10,50); b=rand(1,9); answer=a-b; break;
         case '×': a=rand(10,30); b=rand(2,5); answer=a*b; break;
         case '÷': b=rand(2,5); answer=rand(2,9); a=answer*b; break;
       }
-    }
-  } else if (questionNumber <= 10) {
-    // Normal
-    if (useDec) {
-      switch (op) {
-        case '+': { const a10=rand(100,990),b10=rand(10,500); a=a10/10; b=b10/10; answer=(a10+b10)/10; break; }
-        case '-': { const a10=rand(200,990),b10=rand(10,Math.min(500,a10-1)); a=a10/10; b=b10/10; answer=(a10-b10)/10; break; }
-        case '×': { const a10=rand(100,500); b=rand(2,9); a=a10/10; answer=roundDec(a*b); break; }
-        case '÷': { const ds=[2,4,5]; b=ds[rand(0,2)]; a=rand(10,99); while(a%b===0)a++; answer=roundDec(a/b); break; }
-      }
-    } else {
+    } else if (level === 2) {
       switch (op) {
         case '+': a=rand(10,99); b=rand(10,99); answer=a+b; break;
         case '-': a=rand(10,99); b=rand(10,99); if(a<=b){const t=a;a=b;b=t;} answer=a-b; if(answer===0){a++;answer=a-b;} break;
         case '×': a=rand(10,99); b=rand(2,9); answer=a*b; break;
         case '÷': b=rand(2,9); answer=rand(5,15); a=answer*b; break;
       }
-    }
-  } else if (questionNumber <= 20) {
-    // Hard-ish
-    if (useDec) {
-      switch (op) {
-        case '+': { const a10=rand(100,2000),b10=rand(10,990); a=a10/10; b=b10/10; answer=(a10+b10)/10; break; }
-        case '-': { const a10=rand(500,5000),b10=rand(10,Math.min(990,a10-1)); a=a10/10; b=b10/10; answer=(a10-b10)/10; break; }
-        case '×': { const a10=rand(100,999); b=rand(4,9); a=a10/10; answer=roundDec(a*b); break; }
-        case '÷': { const ds=[2,4,5]; b=ds[rand(0,2)]; a=rand(20,200); while(a%b===0)a++; answer=roundDec(a/b); break; }
-      }
-    } else {
+    } else if (level === 3) {
       switch (op) {
         case '+': a=rand(100,999); b=rand(10,99); answer=a+b; break;
         case '-': a=rand(100,999); b=rand(10,99); answer=a-b; break;
         case '×': a=rand(30,99); b=rand(4,9); answer=a*b; break;
         case '÷': b=rand(2,5); answer=rand(10,99); a=answer*b; break;
-      }
-    }
-  } else {
-    // Hard
-    if (useDec) {
-      switch (op) {
-        case '+': { const a10=rand(1000,9990),b10=rand(100,990); a=a10/10; b=b10/10; answer=(a10+b10)/10; break; }
-        case '-': { const a10=rand(1000,9990),b10=rand(100,Math.min(990,a10-1)); a=a10/10; b=b10/10; answer=(a10-b10)/10; break; }
-        case '×': { const a10=rand(100,999); b=rand(5,9); a=a10/10; answer=roundDec(a*b); break; }
-        case '÷': { const ds=[2,4,5,8]; b=ds[rand(0,3)]; a=rand(50,300); while(a%b===0)a++; answer=roundDec(a/b); break; }
       }
     } else {
       switch (op) {
@@ -363,6 +330,123 @@ function generateProblem(questionNumber) {
         case '×': a=rand(50,99); b=rand(5,9); answer=a*b; break;
         case '÷': b=rand(3,9); answer=rand(20,150); a=answer*b; break;
       }
+    }
+  } else {
+    // ===== Decimal problems =====
+    // Digits = significant digits (0.043 has 2 sig digits)
+    // Both operands can be < 1 (e.g., 0.28 × 0.3)
+    switch (op) {
+      case '+':
+        if (level === 1) {
+          // 0.X + 0.Y  or  X.Y + 0.Z
+          if (Math.random() < 0.5) {
+            a = rand(1,9)/10; b = rand(1,9)/10;
+          } else {
+            a = rand(10,99)/10; b = rand(1,9)/10;
+          }
+        } else if (level === 2) {
+          // 0.XY + 0.Z  or  X.Y + 0.XY
+          if (Math.random() < 0.5) {
+            a = rand(10,99)/100; b = rand(1,9)/10;
+          } else {
+            a = rand(10,99)/10; b = rand(10,99)/100;
+          }
+        } else if (level === 3) {
+          // X.YZ + 0.AB  or  XY.Z + 0.AB
+          if (Math.random() < 0.5) {
+            a = rand(100,999)/100; b = rand(10,99)/100;
+          } else {
+            a = rand(100,999)/10; b = rand(10,99)/100;
+          }
+        } else {
+          // XY.ZW + A.BC  or  X.YZ + AB.C
+          if (Math.random() < 0.5) {
+            a = rand(1000,9999)/100; b = rand(100,999)/100;
+          } else {
+            a = rand(100,999)/100; b = rand(100,999)/10;
+          }
+        }
+        answer = roundDec(a + b);
+        break;
+
+      case '-':
+        if (level === 1) {
+          if (Math.random() < 0.5) {
+            a = rand(5,9)/10; b = rand(1,4)/10;           // 0.X - 0.Y (a>b guaranteed)
+          } else {
+            a = rand(10,99)/10; b = rand(1,9)/10;          // X.Y - 0.Z
+          }
+        } else if (level === 2) {
+          if (Math.random() < 0.5) {
+            a = rand(50,99)/100; b = rand(10,49)/100;      // 0.XY - 0.AB (a>b guaranteed)
+          } else {
+            a = rand(10,99)/10; b = rand(10,99)/100;       // X.Y - 0.XY
+          }
+        } else if (level === 3) {
+          if (Math.random() < 0.5) {
+            a = rand(100,999)/100; b = rand(10,99)/100;    // X.YZ - 0.AB
+          } else {
+            a = rand(100,999)/10; b = rand(10,99)/10;      // XY.Z - A.B
+          }
+        } else {
+          if (Math.random() < 0.5) {
+            a = rand(100,999)/100; b = rand(100,999)/100;  // may need swap
+          } else {
+            a = rand(100,999)/10; b = rand(100,999)/100;   // XY.Z - A.BC
+          }
+        }
+        if (a <= b) { const t = a; a = b; b = t; }
+        answer = roundDec(a - b);
+        if (answer === 0) { a = roundDec(a + 0.1); answer = roundDec(a - b); }
+        break;
+
+      case '×':
+        if (level === 1) {
+          // 0.X × Y (e.g., 0.3 × 4)
+          a = rand(1,9)/10; b = rand(2,9);
+        } else if (level === 2) {
+          // 0.XY × 0.Z (e.g., 0.28 × 0.3) or X.Y × 0.Z
+          if (Math.random() < 0.5) {
+            a = rand(10,99)/100; b = rand(2,9)/10;
+          } else {
+            a = rand(10,99)/10; b = rand(2,9)/10;
+          }
+        } else if (level === 3) {
+          // 0.XY × 0.Z  or  0.XY × Y
+          if (Math.random() < 0.5) {
+            a = rand(10,99)/100; b = rand(2,9)/10;
+          } else {
+            a = rand(10,99)/100; b = rand(2,9);
+          }
+        } else {
+          // 0.XY × 0.Z  or  X.Y × 0.XY
+          if (Math.random() < 0.5) {
+            a = rand(10,99)/100; b = rand(2,9)/10;
+          } else {
+            a = rand(10,99)/10; b = rand(10,99)/100;
+          }
+        }
+        answer = roundDec(a * b);
+        break;
+
+      case '÷':
+        // Generate backwards: answer × b = a (guarantees terminating decimal)
+        if (level === 1) {
+          answer = rand(2,9);
+          b = pick([0.2, 0.4, 0.5]);
+        } else if (level === 2) {
+          answer = rand(2,20);
+          b = pick([0.2, 0.4, 0.5, 0.8, 0.25]);
+        } else if (level === 3) {
+          answer = rand(5,99)/10;
+          b = pick([0.2, 0.4, 0.5, 0.8, 0.25]);
+        } else {
+          answer = rand(5,199)/10;
+          b = pick([0.2, 0.4, 0.5, 0.8, 0.25]);
+        }
+        a = roundDec(answer * b);
+        answer = roundDec(a / b);
+        break;
     }
   }
 
@@ -412,7 +496,7 @@ function submitAnswer() {
 
   const feedbackEl = document.getElementById('feedback');
 
-  if (Math.abs(userAnswer - currentAnswer) < 0.005) {
+  if (Math.abs(userAnswer - currentAnswer) < 0.0005) {
     // Correct
     score++;
     timeLeft += 5;
