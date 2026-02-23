@@ -185,7 +185,7 @@
   <div class="question-number">第 <span id="questionNum">1</span> 問</div>
   <div id="questionBox" class="question">12 + 34</div>
   <div class="answer-area">
-    <input type="text" id="answerInput" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="答え">
+    <input type="text" id="answerInput" inputmode="decimal" pattern="[0-9.]*" autocomplete="off" placeholder="答え">
     <button id="submitBtn" class="btn btn-primary" onclick="submitAnswer()">OK</button>
   </div>
   <div id="feedback" class="feedback"></div>
@@ -201,7 +201,7 @@
     <button class="numpad-btn" data-key="9">9</button>
     <button class="numpad-btn key-del" data-key="del">&#x232B;</button>
     <button class="numpad-btn key-0" data-key="0">0</button>
-    <button class="numpad-btn" data-key="del" style="visibility:hidden"></button>
+    <button class="numpad-btn" data-key=".">.</button>
     <button class="numpad-btn key-ok" data-key="ok">OK</button>
   </div>
 </div>
@@ -280,46 +280,93 @@ function rand(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function roundDec(n) {
+  return Math.round(n * 1000) / 1000;
+}
+
+function formatNum(n) {
+  return Number.isInteger(n) ? String(n) : String(roundDec(n));
+}
+
 function generateProblem(questionNumber) {
   const ops = ['+', '-', '×', '÷'];
   const op = ops[rand(0, 3)];
-  let a, b, answer, display;
+  let a, b, answer;
+
+  const decChance = questionNumber <= 5 ? 0.25 : questionNumber <= 10 ? 0.35 : 0.45;
+  const useDec = Math.random() < decChance;
 
   if (questionNumber <= 5) {
     // Easy
-    switch (op) {
-      case '+': a = rand(10, 50); b = rand(1, 9); answer = a + b; break;
-      case '-': a = rand(10, 50); b = rand(1, 9); if (a <= b) a = b + rand(1, 20); answer = a - b; break;
-      case '×': a = rand(10, 30); b = rand(2, 5); answer = a * b; break;
-      case '÷': b = rand(2, 5); answer = rand(2, 9); a = answer * b; break;
+    if (useDec) {
+      switch (op) {
+        case '+': { const a10=rand(10,200),b10=rand(1,90); a=a10/10; b=b10/10; answer=(a10+b10)/10; break; }
+        case '-': { const a10=rand(50,200),b10=rand(1,Math.min(49,a10-1)); a=a10/10; b=b10/10; answer=(a10-b10)/10; break; }
+        case '×': { const a10=rand(11,99); b=rand(2,5); a=a10/10; answer=roundDec(a*b); break; }
+        case '÷': { const ds=[2,4,5]; b=ds[rand(0,2)]; a=rand(10,50); while(a%b===0)a++; answer=roundDec(a/b); break; }
+      }
+    } else {
+      switch (op) {
+        case '+': a=rand(10,50); b=rand(1,9); answer=a+b; break;
+        case '-': a=rand(10,50); b=rand(1,9); answer=a-b; break;
+        case '×': a=rand(10,30); b=rand(2,5); answer=a*b; break;
+        case '÷': b=rand(2,5); answer=rand(2,9); a=answer*b; break;
+      }
     }
   } else if (questionNumber <= 10) {
     // Normal
-    switch (op) {
-      case '+': a = rand(10, 99); b = rand(10, 99); answer = a + b; break;
-      case '-': a = rand(10, 99); b = rand(10, 99); if (a <= b) { const t = a; a = b; b = t; } answer = a - b; if (answer === 0) { a++; answer = a - b; } break;
-      case '×': a = rand(10, 99); b = rand(2, 9); answer = a * b; break;
-      case '÷': b = rand(2, 9); answer = rand(5, 15); a = answer * b; break;
+    if (useDec) {
+      switch (op) {
+        case '+': { const a10=rand(100,990),b10=rand(10,500); a=a10/10; b=b10/10; answer=(a10+b10)/10; break; }
+        case '-': { const a10=rand(200,990),b10=rand(10,Math.min(500,a10-1)); a=a10/10; b=b10/10; answer=(a10-b10)/10; break; }
+        case '×': { const a10=rand(100,500); b=rand(2,9); a=a10/10; answer=roundDec(a*b); break; }
+        case '÷': { const ds=[2,4,5]; b=ds[rand(0,2)]; a=rand(10,99); while(a%b===0)a++; answer=roundDec(a/b); break; }
+      }
+    } else {
+      switch (op) {
+        case '+': a=rand(10,99); b=rand(10,99); answer=a+b; break;
+        case '-': a=rand(10,99); b=rand(10,99); if(a<=b){const t=a;a=b;b=t;} answer=a-b; if(answer===0){a++;answer=a-b;} break;
+        case '×': a=rand(10,99); b=rand(2,9); answer=a*b; break;
+        case '÷': b=rand(2,9); answer=rand(5,15); a=answer*b; break;
+      }
     }
   } else if (questionNumber <= 20) {
     // Hard-ish
-    switch (op) {
-      case '+': a = rand(100, 999); b = rand(10, 99); answer = a + b; break;
-      case '-': a = rand(100, 999); b = rand(10, 99); answer = a - b; break;
-      case '×': a = rand(30, 99); b = rand(4, 9); answer = a * b; break;
-      case '÷': b = rand(2, 5); answer = rand(10, 99); a = answer * b; break;
+    if (useDec) {
+      switch (op) {
+        case '+': { const a10=rand(100,2000),b10=rand(10,990); a=a10/10; b=b10/10; answer=(a10+b10)/10; break; }
+        case '-': { const a10=rand(500,5000),b10=rand(10,Math.min(990,a10-1)); a=a10/10; b=b10/10; answer=(a10-b10)/10; break; }
+        case '×': { const a10=rand(100,999); b=rand(4,9); a=a10/10; answer=roundDec(a*b); break; }
+        case '÷': { const ds=[2,4,5]; b=ds[rand(0,2)]; a=rand(20,200); while(a%b===0)a++; answer=roundDec(a/b); break; }
+      }
+    } else {
+      switch (op) {
+        case '+': a=rand(100,999); b=rand(10,99); answer=a+b; break;
+        case '-': a=rand(100,999); b=rand(10,99); answer=a-b; break;
+        case '×': a=rand(30,99); b=rand(4,9); answer=a*b; break;
+        case '÷': b=rand(2,5); answer=rand(10,99); a=answer*b; break;
+      }
     }
   } else {
     // Hard
-    switch (op) {
-      case '+': a = rand(100, 999); b = rand(100, 999); answer = a + b; break;
-      case '-': a = rand(100, 999); b = rand(100, 999); if (a <= b) { const t = a; a = b; b = t; } answer = a - b; if (answer === 0) { a++; answer = a - b; } break;
-      case '×': a = rand(50, 99); b = rand(5, 9); answer = a * b; break;
-      case '÷': b = rand(3, 9); answer = rand(20, 150); a = answer * b; break;
+    if (useDec) {
+      switch (op) {
+        case '+': { const a10=rand(1000,9990),b10=rand(100,990); a=a10/10; b=b10/10; answer=(a10+b10)/10; break; }
+        case '-': { const a10=rand(1000,9990),b10=rand(100,Math.min(990,a10-1)); a=a10/10; b=b10/10; answer=(a10-b10)/10; break; }
+        case '×': { const a10=rand(100,999); b=rand(5,9); a=a10/10; answer=roundDec(a*b); break; }
+        case '÷': { const ds=[2,4,5,8]; b=ds[rand(0,3)]; a=rand(50,300); while(a%b===0)a++; answer=roundDec(a/b); break; }
+      }
+    } else {
+      switch (op) {
+        case '+': a=rand(100,999); b=rand(100,999); answer=a+b; break;
+        case '-': a=rand(100,999); b=rand(100,999); if(a<=b){const t=a;a=b;b=t;} answer=a-b; if(answer===0){a++;answer=a-b;} break;
+        case '×': a=rand(50,99); b=rand(5,9); answer=a*b; break;
+        case '÷': b=rand(3,9); answer=rand(20,150); a=answer*b; break;
+      }
     }
   }
 
-  display = `${a} ${op} ${b}`;
+  const display = `${formatNum(a)} ${op} ${formatNum(b)}`;
   return { display, answer };
 }
 
@@ -357,7 +404,7 @@ function submitAnswer() {
   const value = input.value.trim();
   if (value === '') return;
 
-  const userAnswer = parseInt(value, 10);
+  const userAnswer = parseFloat(value);
   if (isNaN(userAnswer)) {
     input.value = '';
     return;
@@ -365,7 +412,7 @@ function submitAnswer() {
 
   const feedbackEl = document.getElementById('feedback');
 
-  if (userAnswer === currentAnswer) {
+  if (Math.abs(userAnswer - currentAnswer) < 0.005) {
     // Correct
     score++;
     timeLeft += 5;
@@ -380,7 +427,7 @@ function submitAnswer() {
   } else {
     // Wrong - game over
     gameActive = false;
-    feedbackEl.textContent = `不正解… 答えは ${currentAnswer}`;
+    feedbackEl.textContent = `不正解… 答えは ${formatNum(currentAnswer)}`;
     feedbackEl.className = 'feedback wrong';
     setTimeout(() => endGame('wrong'), 800);
   }
@@ -452,6 +499,8 @@ document.getElementById('numpad').addEventListener('click', (e) => {
     submitAnswer();
   } else if (key === 'del') {
     input.value = input.value.slice(0, -1);
+  } else if (key === '.') {
+    if (!input.value.includes('.')) input.value += '.';
   } else {
     input.value += key;
   }
