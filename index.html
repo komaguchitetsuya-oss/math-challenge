@@ -135,6 +135,22 @@
     padding:16px;margin-bottom:24px;
   }
 
+  /* Wrong list */
+  .wrong-item{
+    display:flex;align-items:center;padding:12px 16px;
+    border-bottom:1px solid #f1f5f9;gap:8px;
+  }
+  .wrong-item:last-child{border-bottom:none}
+  .wrong-item .problem-text{flex:1;font-size:1rem;font-weight:600;text-align:left}
+  .wrong-item .wrong-answer{font-size:.85rem;color:var(--danger);text-align:right}
+  .wrong-item .correct-answer{font-size:.85rem;color:var(--success);text-align:right}
+  .wrong-item .wrong-date{font-size:.75rem;color:var(--muted);text-align:left}
+  .wrong-item .wrong-delete{
+    background:none;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;
+    padding:4px 8px;border-radius:4px;
+  }
+  .wrong-item .wrong-delete:hover{color:var(--danger);background:#fee2e2}
+
   /* Game over overlay */
   .game-over-reason{
     font-size:1.1rem;color:var(--muted);margin-bottom:8px;
@@ -190,8 +206,10 @@
     <button class="btn btn-primary" onclick="selectMode('random')">ランダムモード<span class="mode-desc">整数＋小数の混合問題</span></button>
     <button class="btn btn-success" onclick="selectMode('easyDec')">やさしい小数モード<span class="mode-desc">小数のみ・かけ算かんたん</span></button>
     <button class="btn btn-warning" onclick="selectMode('hardDec')">難しい小数モード<span class="mode-desc">小数のみ・かけ算むずかしい</span></button>
+    <button class="btn btn-danger" id="reviewModeBtn" onclick="selectMode('review')" style="display:none">復習モード<span class="mode-desc">まちがえた問題をランダムで出題</span></button>
     <button class="btn btn-outline" onclick="showScreen('rankingScreen')">ランキング</button>
     <button class="btn btn-outline" onclick="showScreen('chartScreen')">成績推移</button>
+    <button class="btn btn-outline" onclick="showScreen('wrongListScreen')">まちがえた問題</button>
   </div>
 </div>
 
@@ -248,6 +266,17 @@
   <button class="btn btn-outline" onclick="showScreen('startScreen')">戻る</button>
 </div>
 
+<!-- Wrong List Screen -->
+<div id="wrongListScreen" class="screen">
+  <h2>まちがえた問題</h2>
+  <div id="wrongCount" style="color:var(--muted);font-size:.9rem;margin-bottom:12px"></div>
+  <ul id="wrongList" class="ranking-list"></ul>
+  <div class="btn-group">
+    <button class="btn btn-danger" id="clearWrongBtn" onclick="clearWrongProblems()" style="display:none">すべて削除</button>
+    <button class="btn btn-outline" onclick="showScreen('startScreen')">戻る</button>
+  </div>
+</div>
+
 <!-- Chart Screen -->
 <div id="chartScreen" class="screen">
   <h2>成績推移</h2>
@@ -273,8 +302,11 @@ let rankingViewMode = 'random';
 let chartViewMode = 'random';
 const isTouchDevice = window.matchMedia('(hover:none) and (pointer:coarse)').matches;
 
-const MODE_NAMES = { random: 'ランダム', easyDec: 'やさしい小数', hardDec: '難しい小数' };
-const STORAGE_KEYS = { random: 'mathGameHistory_random', easyDec: 'mathGameHistory_easyDec', hardDec: 'mathGameHistory_hardDec' };
+const MODE_NAMES = { random: 'ランダム', easyDec: 'やさしい小数', hardDec: '難しい小数', review: '復習' };
+const STORAGE_KEYS = { random: 'mathGameHistory_random', easyDec: 'mathGameHistory_easyDec', hardDec: 'mathGameHistory_hardDec', review: 'mathGameHistory_review' };
+const WRONG_KEY = 'mathWrongProblems';
+let currentDisplay = '';  // track current problem display for wrong answer logging
+let reviewPool = [];  // pool of wrong problems for review mode
 
 // ==============================
 // Screen management
@@ -282,8 +314,19 @@ const STORAGE_KEYS = { random: 'mathGameHistory_random', easyDec: 'mathGameHisto
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  if (id === 'rankingScreen') { rankingViewMode = currentMode; renderRankingTabs(); renderRanking(); }
-  if (id === 'chartScreen') { chartViewMode = currentMode; renderChartTabs(); renderChart(); }
+  if (id === 'rankingScreen') { rankingViewMode = currentMode === 'review' ? 'random' : currentMode; renderRankingTabs(); renderRanking(); }
+  if (id === 'chartScreen') { chartViewMode = currentMode === 'review' ? 'random' : currentMode; renderChartTabs(); renderChart(); }
+  if (id === 'wrongListScreen') { renderWrongList(); }
+  if (id === 'startScreen') { updateReviewButton(); }
+}
+
+function updateReviewButton() {
+  const wrongs = getWrongProblems();
+  const btn = document.getElementById('reviewModeBtn');
+  btn.style.display = wrongs.length > 0 ? '' : 'none';
+  if (wrongs.length > 0) {
+    btn.querySelector('.mode-desc').textContent = `まちがえた${wrongs.length}問からランダム出題`;
+  }
 }
 
 // ==============================
@@ -338,6 +381,66 @@ function saveResult(sc) {
   const history = getHistory(currentMode);
   history.push({ date: new Date().toISOString(), score: sc });
   localStorage.setItem(key, JSON.stringify(history));
+}
+
+// ==============================
+// Wrong problems (localStorage)
+// ==============================
+function getWrongProblems() {
+  try { return JSON.parse(localStorage.getItem(WRONG_KEY) || '[]'); } catch { return []; }
+}
+
+function saveWrongProblem(display, userAnswer, correctAnswer) {
+  const wrongs = getWrongProblems();
+  wrongs.push({
+    display,
+    userAnswer: formatNum(userAnswer),
+    correctAnswer: formatNum(correctAnswer),
+    date: new Date().toISOString()
+  });
+  localStorage.setItem(WRONG_KEY, JSON.stringify(wrongs));
+}
+
+function removeWrongProblem(index) {
+  const wrongs = getWrongProblems();
+  wrongs.splice(index, 1);
+  localStorage.setItem(WRONG_KEY, JSON.stringify(wrongs));
+}
+
+function clearWrongProblems() {
+  if (!confirm('まちがえた問題をすべて削除しますか？')) return;
+  localStorage.removeItem(WRONG_KEY);
+  renderWrongList();
+}
+
+function renderWrongList() {
+  const wrongs = getWrongProblems();
+  const list = document.getElementById('wrongList');
+  const countEl = document.getElementById('wrongCount');
+  const clearBtn = document.getElementById('clearWrongBtn');
+
+  countEl.textContent = `${wrongs.length} 問`;
+  clearBtn.style.display = wrongs.length > 0 ? '' : 'none';
+
+  if (wrongs.length === 0) {
+    list.innerHTML = '<li class="empty-message">まちがえた問題はありません。</li>';
+    return;
+  }
+
+  // Show newest first
+  list.innerHTML = wrongs.slice().reverse().map((item, ri) => {
+    const i = wrongs.length - 1 - ri;
+    const d = new Date(item.date);
+    const dateStr = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    return `
+      <li class="wrong-item">
+        <div style="flex:1">
+          <div class="problem-text">${item.display} = ?</div>
+          <div class="wrong-date">${dateStr}　<span class="wrong-answer">✗ ${item.userAnswer}</span>　<span class="correct-answer">→ ${item.correctAnswer}</span>${item.correctStreak ? `　<span style="color:var(--primary);font-weight:600">🔥${item.correctStreak}/10</span>` : ''}</div>
+        </div>
+        <button class="wrong-delete" onclick="removeWrongProblem(${i});renderWrongList()">✕</button>
+      </li>`;
+  }).join('');
 }
 
 // ==============================
@@ -472,7 +575,7 @@ function generateProblem(questionNumber) {
           else { a = rand(10,99)/100; b = rand(2,9); }
         } else {
           if (Math.random() < 0.5) { a = rand(10,99)/100; b = rand(2,9)/10; }
-          else { a = rand(10,99)/10; b = rand(10,99)/100; }
+          else { a = rand(1,9)/10; b = rand(2,9)/10; }
         }
         answer = roundDec(a * b);
         break;
@@ -506,6 +609,13 @@ function generateProblem(questionNumber) {
 // ==============================
 function selectMode(mode) {
   currentMode = mode;
+  if (mode === 'review') {
+    reviewPool = getWrongProblems();
+    if (reviewPool.length === 0) {
+      alert('まちがえた問題がありません。');
+      return;
+    }
+  }
   startGame();
 }
 
@@ -527,12 +637,45 @@ function startGame() {
 
 function nextQuestion() {
   const questionNum = score + 1;
-  const problem = generateProblem(questionNum);
+  let problem;
+
+  if (currentMode === 'review') {
+    if (reviewPool.length === 0) {
+      // All review problems done - end game
+      gameActive = false;
+      endGame('reviewDone');
+      return;
+    }
+    const idx = rand(0, reviewPool.length - 1);
+    const wp = reviewPool.splice(idx, 1)[0];
+    problem = parseReviewProblem(wp);
+  } else {
+    problem = generateProblem(questionNum);
+  }
+
   currentAnswer = problem.answer;
+  currentDisplay = problem.display;
   document.getElementById('questionBox').textContent = problem.display;
   document.getElementById('questionNum').textContent = questionNum;
   document.getElementById('answerInput').value = '';
   if (!isTouchDevice) document.getElementById('answerInput').focus();
+}
+
+function parseReviewProblem(wp) {
+  // Parse the stored display string (e.g. "12 + 3.4") to get answer
+  const parts = wp.display.split(' ');
+  const a = parseFloat(parts[0]);
+  const op = parts[1];
+  const b = parseFloat(parts[2]);
+  let answer;
+  switch (op) {
+    case '+': answer = roundDec(a + b); break;
+    case '-': answer = roundDec(a - b); break;
+    case '×': answer = roundDec(a * b); break;
+    case '÷': answer = roundDec(a / b); break;
+    default: answer = parseFloat(wp.correctAnswer);
+  }
+  return { display: wp.display, answer };
 }
 
 function submitAnswer() {
@@ -558,12 +701,35 @@ function submitAnswer() {
     document.getElementById('questionBox').classList.remove('flash');
     void document.getElementById('questionBox').offsetWidth;
     document.getElementById('questionBox').classList.add('flash');
+    // Track consecutive correct streak in review mode
+    if (currentMode === 'review') {
+      const wrongs = getWrongProblems();
+      const matchIdx = wrongs.findIndex(w => w.display === currentDisplay);
+      if (matchIdx !== -1) {
+        wrongs[matchIdx].correctStreak = (wrongs[matchIdx].correctStreak || 0) + 1;
+        if (wrongs[matchIdx].correctStreak >= 10) {
+          wrongs.splice(matchIdx, 1);
+        }
+        localStorage.setItem(WRONG_KEY, JSON.stringify(wrongs));
+      }
+    }
     updateTimerDisplay();
     nextQuestion();
   } else {
     gameActive = false;
     feedbackEl.textContent = `不正解… 答えは ${formatNum(currentAnswer)}`;
     feedbackEl.className = 'feedback wrong';
+    if (currentMode !== 'review') {
+      saveWrongProblem(currentDisplay, userAnswer, currentAnswer);
+    } else {
+      // Reset streak on wrong answer in review mode
+      const wrongs = getWrongProblems();
+      const matchIdx = wrongs.findIndex(w => w.display === currentDisplay);
+      if (matchIdx !== -1) {
+        wrongs[matchIdx].correctStreak = 0;
+        localStorage.setItem(WRONG_KEY, JSON.stringify(wrongs));
+      }
+    }
     setTimeout(() => endGame('wrong'), 800);
   }
 }
@@ -605,7 +771,7 @@ function endGame(reason) {
   document.getElementById('resultScore').textContent = score;
   document.getElementById('resultRank').textContent = `歴代 ${rank} 位 / ${history.length} 回中`;
   document.getElementById('gameOverReason').textContent =
-    reason === 'time' ? 'タイムアップ！' : '不正解でゲーム終了';
+    reason === 'time' ? 'タイムアップ！' : reason === 'reviewDone' ? '復習問題をすべてクリア！' : '不正解でゲーム終了';
 
   showScreen('resultScreen');
 }
@@ -673,6 +839,9 @@ function renderRanking() {
 // ==============================
 // Chart
 // ==============================
+// Init: show review button if needed
+updateReviewButton();
+
 function renderChart() {
   const history = getHistory(chartViewMode);
   const canvas = document.getElementById('historyChart');
