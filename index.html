@@ -9,7 +9,7 @@
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   :root{
     --primary:#4f46e5;--primary-hover:#4338ca;
-    --success:#16a34a;--danger:#dc2626;
+    --success:#16a34a;--danger:#dc2626;--warning:#ea580c;
     --bg:#f8fafc;--card:#fff;--text:#1e293b;--muted:#64748b;
     --radius:12px;
   }
@@ -23,7 +23,7 @@
   .screen.active{display:block}
   h1{font-size:2rem;margin-bottom:8px}
   h2{font-size:1.5rem;margin-bottom:16px}
-  .subtitle{color:var(--muted);margin-bottom:32px;font-size:.95rem}
+  .subtitle{color:var(--muted);margin-bottom:24px;font-size:.95rem}
   .btn{
     display:inline-block;padding:14px 32px;border:none;border-radius:var(--radius);
     font-size:1.1rem;font-weight:600;cursor:pointer;transition:all .15s;
@@ -33,12 +33,28 @@
   .btn-primary:hover{background:var(--primary-hover)}
   .btn-success{background:var(--success)}
   .btn-danger{background:var(--danger)}
+  .btn-warning{background:var(--warning)}
   .btn-outline{
     background:transparent;color:var(--primary);border:2px solid var(--primary);
   }
   .btn-outline:hover{background:var(--primary);color:#fff}
   .btn+.btn{margin-top:12px}
   .btn-group{display:flex;flex-direction:column;align-items:center;gap:12px}
+
+  .mode-desc{font-size:.75rem;font-weight:400;opacity:.85;display:block;margin-top:2px}
+  .mode-label{font-size:.85rem;color:var(--muted);margin-bottom:4px}
+
+  /* Mode tabs */
+  .mode-tabs{
+    display:flex;gap:6px;justify-content:center;margin-bottom:16px;flex-wrap:wrap;
+  }
+  .mode-tab{
+    padding:6px 14px;border:2px solid var(--primary);border-radius:20px;
+    background:transparent;color:var(--primary);font-size:.8rem;font-weight:600;
+    cursor:pointer;transition:all .15s;
+  }
+  .mode-tab.active{background:var(--primary);color:#fff}
+  .mode-tab:hover:not(.active){background:rgba(79,70,229,.08)}
 
   /* Game screen */
   .game-header{
@@ -169,8 +185,11 @@
 <div id="startScreen" class="screen active">
   <h1>さーちゃん計算チャレンジ</h1>
   <p class="subtitle">制限時間内にどれだけ連続正解できるか挑戦しよう！<br>正解するたびに +5秒</p>
+  <p style="color:var(--muted);margin-bottom:12px;font-size:.9rem">モードを選んでスタート</p>
   <div class="btn-group">
-    <button class="btn btn-primary" onclick="startGame()">スタート</button>
+    <button class="btn btn-primary" onclick="selectMode('random')">ランダムモード<span class="mode-desc">整数＋小数の混合問題</span></button>
+    <button class="btn btn-success" onclick="selectMode('easyDec')">やさしい小数モード<span class="mode-desc">小数のみ・かけ算かんたん</span></button>
+    <button class="btn btn-warning" onclick="selectMode('hardDec')">難しい小数モード<span class="mode-desc">小数のみ・かけ算むずかしい</span></button>
     <button class="btn btn-outline" onclick="showScreen('rankingScreen')">ランキング</button>
     <button class="btn btn-outline" onclick="showScreen('chartScreen')">成績推移</button>
   </div>
@@ -178,6 +197,7 @@
 
 <!-- Game Screen -->
 <div id="gameScreen" class="screen">
+  <div id="gameModeLabel" class="mode-label"></div>
   <div class="game-header">
     <div><span style="font-size:.85rem;color:var(--muted)">残り時間</span><br><span id="timer" class="timer">60.0</span></div>
     <div><span style="font-size:.85rem;color:var(--muted)">連続正解</span><br><span id="scoreDisplay" class="score-display">0</span></div>
@@ -223,6 +243,7 @@
 <!-- Ranking Screen -->
 <div id="rankingScreen" class="screen">
   <h2>ランキング</h2>
+  <div class="mode-tabs" id="rankingTabs"></div>
   <ul id="rankingList" class="ranking-list"></ul>
   <button class="btn btn-outline" onclick="showScreen('startScreen')">戻る</button>
 </div>
@@ -230,6 +251,7 @@
 <!-- Chart Screen -->
 <div id="chartScreen" class="screen">
   <h2>成績推移</h2>
+  <div class="mode-tabs" id="chartTabs"></div>
   <div class="chart-container">
     <canvas id="historyChart"></canvas>
   </div>
@@ -246,7 +268,13 @@ let currentAnswer = 0;
 let timerInterval = null;
 let gameActive = false;
 let historyChart = null;
+let currentMode = 'random';
+let rankingViewMode = 'random';
+let chartViewMode = 'random';
 const isTouchDevice = window.matchMedia('(hover:none) and (pointer:coarse)').matches;
+
+const MODE_NAMES = { random: 'ランダム', easyDec: 'やさしい小数', hardDec: '難しい小数' };
+const STORAGE_KEYS = { random: 'mathGameHistory_random', easyDec: 'mathGameHistory_easyDec', hardDec: 'mathGameHistory_hardDec' };
 
 // ==============================
 // Screen management
@@ -254,23 +282,62 @@ const isTouchDevice = window.matchMedia('(hover:none) and (pointer:coarse)').mat
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  if (id === 'rankingScreen') renderRanking();
-  if (id === 'chartScreen') renderChart();
+  if (id === 'rankingScreen') { rankingViewMode = currentMode; renderRankingTabs(); renderRanking(); }
+  if (id === 'chartScreen') { chartViewMode = currentMode; renderChartTabs(); renderChart(); }
 }
 
 // ==============================
-// History (localStorage)
+// Mode tabs
 // ==============================
-function getHistory() {
+function renderModeTabs(containerId, activeMode, onClick) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = Object.keys(MODE_NAMES).map(mode =>
+    `<button class="mode-tab${mode === activeMode ? ' active' : ''}" data-mode="${mode}">${MODE_NAMES[mode]}</button>`
+  ).join('');
+  container.querySelectorAll('.mode-tab').forEach(btn => {
+    btn.addEventListener('click', () => onClick(btn.dataset.mode));
+  });
+}
+
+function renderRankingTabs() {
+  renderModeTabs('rankingTabs', rankingViewMode, (mode) => {
+    rankingViewMode = mode;
+    renderRankingTabs();
+    renderRanking();
+  });
+}
+
+function renderChartTabs() {
+  renderModeTabs('chartTabs', chartViewMode, (mode) => {
+    chartViewMode = mode;
+    renderChartTabs();
+    renderChart();
+  });
+}
+
+// ==============================
+// History (localStorage) - mode-separated
+// ==============================
+function getHistory(mode) {
+  mode = mode || currentMode;
+  const key = STORAGE_KEYS[mode] || STORAGE_KEYS.random;
   try {
-    return JSON.parse(localStorage.getItem('mathGameHistory') || '[]');
+    if (!localStorage.getItem(key) && mode === 'random') {
+      const old = localStorage.getItem('mathGameHistory');
+      if (old) {
+        localStorage.setItem(key, old);
+        localStorage.removeItem('mathGameHistory');
+      }
+    }
+    return JSON.parse(localStorage.getItem(key) || '[]');
   } catch { return []; }
 }
 
-function saveResult(score) {
-  const history = getHistory();
-  history.push({ date: new Date().toISOString(), score });
-  localStorage.setItem('mathGameHistory', JSON.stringify(history));
+function saveResult(sc) {
+  const key = STORAGE_KEYS[currentMode] || STORAGE_KEYS.random;
+  const history = getHistory(currentMode);
+  history.push({ date: new Date().toISOString(), score: sc });
+  localStorage.setItem(key, JSON.stringify(history));
 }
 
 // ==============================
@@ -287,8 +354,7 @@ function roundDec(n) {
 }
 
 function formatNum(n) {
-  const r = roundDec(n);
-  return Number.isInteger(r) ? String(r) : String(r);
+  return String(roundDec(n));
 }
 
 function generateProblem(questionNumber) {
@@ -296,12 +362,18 @@ function generateProblem(questionNumber) {
   const op = ops[rand(0, 3)];
   let a, b, answer;
 
-  const decChance = questionNumber <= 5 ? 0.25 : questionNumber <= 10 ? 0.35 : 0.45;
-  const useDec = Math.random() < decChance;
   const level = questionNumber <= 5 ? 1 : questionNumber <= 10 ? 2 : questionNumber <= 20 ? 3 : 4;
 
+  let useDec;
+  if (currentMode === 'random') {
+    const decChance = questionNumber <= 5 ? 0.25 : questionNumber <= 10 ? 0.35 : 0.45;
+    useDec = Math.random() < decChance;
+  } else {
+    useDec = true;
+  }
+
   if (!useDec) {
-    // ===== Integer problems (unchanged) =====
+    // ===== Integer problems =====
     if (level === 1) {
       switch (op) {
         case '+': a=rand(10,50); b=rand(1,9); answer=a+b; break;
@@ -333,104 +405,79 @@ function generateProblem(questionNumber) {
     }
   } else {
     // ===== Decimal problems =====
-    // Digits = significant digits (0.043 has 2 sig digits)
-    // Both operands can be < 1 (e.g., 0.28 × 0.3)
+    // For +/- : ~33% chance one operand is integer (int+dec combo)
+    const useIntDec = (op === '+' || op === '-') && Math.random() < 0.33;
+    // easyDec: multiplication always uses simple pattern (0.X × Y)
+    const mulLevel = (currentMode === 'easyDec') ? 1 : level;
+
     switch (op) {
       case '+':
-        if (level === 1) {
-          // 0.X + 0.Y  or  X.Y + 0.Z
-          if (Math.random() < 0.5) {
-            a = rand(1,9)/10; b = rand(1,9)/10;
-          } else {
-            a = rand(10,99)/10; b = rand(1,9)/10;
-          }
-        } else if (level === 2) {
-          // 0.XY + 0.Z  or  X.Y + 0.XY
-          if (Math.random() < 0.5) {
-            a = rand(10,99)/100; b = rand(1,9)/10;
-          } else {
-            a = rand(10,99)/10; b = rand(10,99)/100;
-          }
-        } else if (level === 3) {
-          // X.YZ + 0.AB  or  XY.Z + 0.AB
-          if (Math.random() < 0.5) {
-            a = rand(100,999)/100; b = rand(10,99)/100;
-          } else {
-            a = rand(100,999)/10; b = rand(10,99)/100;
-          }
+        if (useIntDec) {
+          if (level === 1) { a = rand(2, 9); b = rand(1, 9) / 10; }
+          else if (level === 2) { a = rand(10, 50); b = rand(1, 9) / 10; }
+          else if (level === 3) { a = rand(10, 99); b = rand(10, 99) / 100; }
+          else { a = rand(100, 999); b = rand(10, 99) / 100; }
         } else {
-          // XY.ZW + A.BC  or  X.YZ + AB.C
-          if (Math.random() < 0.5) {
-            a = rand(1000,9999)/100; b = rand(100,999)/100;
+          if (level === 1) {
+            if (Math.random() < 0.5) { a = rand(1,9)/10; b = rand(1,9)/10; }
+            else { a = rand(10,99)/10; b = rand(1,9)/10; }
+          } else if (level === 2) {
+            if (Math.random() < 0.5) { a = rand(10,99)/100; b = rand(1,9)/10; }
+            else { a = rand(10,99)/10; b = rand(10,99)/100; }
+          } else if (level === 3) {
+            if (Math.random() < 0.5) { a = rand(100,999)/100; b = rand(10,99)/100; }
+            else { a = rand(100,999)/10; b = rand(10,99)/100; }
           } else {
-            a = rand(100,999)/100; b = rand(100,999)/10;
+            if (Math.random() < 0.5) { a = rand(1000,9999)/100; b = rand(100,999)/100; }
+            else { a = rand(100,999)/100; b = rand(100,999)/10; }
           }
         }
         answer = roundDec(a + b);
         break;
 
       case '-':
-        if (level === 1) {
-          if (Math.random() < 0.5) {
-            a = rand(5,9)/10; b = rand(1,4)/10;           // 0.X - 0.Y (a>b guaranteed)
-          } else {
-            a = rand(10,99)/10; b = rand(1,9)/10;          // X.Y - 0.Z
-          }
-        } else if (level === 2) {
-          if (Math.random() < 0.5) {
-            a = rand(50,99)/100; b = rand(10,49)/100;      // 0.XY - 0.AB (a>b guaranteed)
-          } else {
-            a = rand(10,99)/10; b = rand(10,99)/100;       // X.Y - 0.XY
-          }
-        } else if (level === 3) {
-          if (Math.random() < 0.5) {
-            a = rand(100,999)/100; b = rand(10,99)/100;    // X.YZ - 0.AB
-          } else {
-            a = rand(100,999)/10; b = rand(10,99)/10;      // XY.Z - A.B
-          }
+        if (useIntDec) {
+          if (level === 1) { a = rand(2, 9); b = rand(1, 9) / 10; }
+          else if (level === 2) { a = rand(10, 50); b = rand(1, 9) / 10; }
+          else if (level === 3) { a = rand(10, 99); b = rand(10, 99) / 100; }
+          else { a = rand(100, 999); b = rand(10, 99) / 100; }
         } else {
-          if (Math.random() < 0.5) {
-            a = rand(100,999)/100; b = rand(100,999)/100;  // may need swap
+          if (level === 1) {
+            if (Math.random() < 0.5) { a = rand(5,9)/10; b = rand(1,4)/10; }
+            else { a = rand(10,99)/10; b = rand(1,9)/10; }
+          } else if (level === 2) {
+            if (Math.random() < 0.5) { a = rand(50,99)/100; b = rand(10,49)/100; }
+            else { a = rand(10,99)/10; b = rand(10,99)/100; }
+          } else if (level === 3) {
+            if (Math.random() < 0.5) { a = rand(100,999)/100; b = rand(10,99)/100; }
+            else { a = rand(100,999)/10; b = rand(10,99)/10; }
           } else {
-            a = rand(100,999)/10; b = rand(100,999)/100;   // XY.Z - A.BC
+            if (Math.random() < 0.5) { a = rand(100,999)/100; b = rand(100,999)/100; }
+            else { a = rand(100,999)/10; b = rand(100,999)/100; }
           }
+          if (a <= b) { const t = a; a = b; b = t; }
         }
-        if (a <= b) { const t = a; a = b; b = t; }
         answer = roundDec(a - b);
         if (answer === 0) { a = roundDec(a + 0.1); answer = roundDec(a - b); }
         break;
 
       case '×':
-        if (level === 1) {
-          // 0.X × Y (e.g., 0.3 × 4)
+        if (mulLevel === 1) {
           a = rand(1,9)/10; b = rand(2,9);
-        } else if (level === 2) {
-          // 0.XY × 0.Z (e.g., 0.28 × 0.3) or X.Y × 0.Z
-          if (Math.random() < 0.5) {
-            a = rand(10,99)/100; b = rand(2,9)/10;
-          } else {
-            a = rand(10,99)/10; b = rand(2,9)/10;
-          }
-        } else if (level === 3) {
-          // 0.XY × 0.Z  or  0.XY × Y
-          if (Math.random() < 0.5) {
-            a = rand(10,99)/100; b = rand(2,9)/10;
-          } else {
-            a = rand(10,99)/100; b = rand(2,9);
-          }
+        } else if (mulLevel === 2) {
+          if (Math.random() < 0.5) { a = rand(10,99)/100; b = rand(2,9)/10; }
+          else { a = rand(10,99)/10; b = rand(2,9)/10; }
+        } else if (mulLevel === 3) {
+          if (Math.random() < 0.5) { a = rand(10,99)/100; b = rand(2,9)/10; }
+          else { a = rand(10,99)/100; b = rand(2,9); }
         } else {
-          // 0.XY × 0.Z  or  X.Y × 0.XY
-          if (Math.random() < 0.5) {
-            a = rand(10,99)/100; b = rand(2,9)/10;
-          } else {
-            a = rand(10,99)/10; b = rand(10,99)/100;
-          }
+          if (Math.random() < 0.5) { a = rand(10,99)/100; b = rand(2,9)/10; }
+          else { a = rand(10,99)/10; b = rand(10,99)/100; }
         }
         answer = roundDec(a * b);
         break;
 
       case '÷':
-        // Generate backwards: answer × b = a (guarantees terminating decimal)
         if (level === 1) {
           answer = rand(2,9);
           b = pick([0.2, 0.4, 0.5]);
@@ -457,6 +504,11 @@ function generateProblem(questionNumber) {
 // ==============================
 // Game logic
 // ==============================
+function selectMode(mode) {
+  currentMode = mode;
+  startGame();
+}
+
 function startGame() {
   score = 0;
   timeLeft = 60.0;
@@ -465,6 +517,7 @@ function startGame() {
   document.getElementById('scoreDisplay').textContent = '0';
   document.getElementById('feedback').textContent = '';
   document.getElementById('feedback').className = 'feedback';
+  document.getElementById('gameModeLabel').textContent = MODE_NAMES[currentMode] + 'モード';
 
   showScreen('gameScreen');
   nextQuestion();
@@ -497,19 +550,17 @@ function submitAnswer() {
   const feedbackEl = document.getElementById('feedback');
 
   if (Math.abs(userAnswer - currentAnswer) < 0.0005) {
-    // Correct
     score++;
     timeLeft += 5;
     document.getElementById('scoreDisplay').textContent = score;
     feedbackEl.textContent = '正解！ +5秒';
     feedbackEl.className = 'feedback correct';
     document.getElementById('questionBox').classList.remove('flash');
-    void document.getElementById('questionBox').offsetWidth; // reflow
+    void document.getElementById('questionBox').offsetWidth;
     document.getElementById('questionBox').classList.add('flash');
     updateTimerDisplay();
     nextQuestion();
   } else {
-    // Wrong - game over
     gameActive = false;
     feedbackEl.textContent = `不正解… 答えは ${formatNum(currentAnswer)}`;
     feedbackEl.className = 'feedback wrong';
@@ -547,7 +598,7 @@ function endGame(reason) {
   gameActive = false;
 
   saveResult(score);
-  const history = getHistory();
+  const history = getHistory(currentMode);
   const sorted = [...history].sort((a, b) => b.score - a.score);
   const rank = sorted.findIndex(h => h.score === score && h.date === history[history.length - 1].date) + 1;
 
@@ -594,7 +645,7 @@ document.getElementById('numpad').addEventListener('click', (e) => {
 // Ranking
 // ==============================
 function renderRanking() {
-  const history = getHistory();
+  const history = getHistory(rankingViewMode);
   const sorted = [...history].sort((a, b) => b.score - a.score).slice(0, 20);
   const list = document.getElementById('rankingList');
 
@@ -623,7 +674,7 @@ function renderRanking() {
 // Chart
 // ==============================
 function renderChart() {
-  const history = getHistory();
+  const history = getHistory(chartViewMode);
   const canvas = document.getElementById('historyChart');
 
   if (historyChart) {
@@ -641,7 +692,6 @@ function renderChart() {
     return;
   }
 
-  // Show last 30 plays
   const recent = history.slice(-30);
   const labels = recent.map(h => {
     const d = new Date(h.date);
